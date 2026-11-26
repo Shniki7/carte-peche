@@ -912,6 +912,55 @@ body.so #toast{bottom:auto;top:calc(66px + var(--safeT))}
 .sensblk .rf{margin:6px 0 0;font-weight:800;color:var(--acc);font-size:14px}
 .rfset summary{min-height:44px;font-weight:700}
 .ok{color:var(--good)}
+
+/* ===== fiches : panneau du bas, Enregistrer toujours visible ===== */
+dialog{padding:0;overflow:hidden;display:none}
+dialog[open]{display:flex}
+#dlgForm{display:flex;flex-direction:column;width:100%;max-height:inherit;min-height:0}
+.dlgbody{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 16px 8px;flex:1;min-height:0}
+.dlgbar{position:static!important;flex:none;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))!important;margin:0!important;border-top:1px solid var(--line);background:var(--bg)}
+@media(max-width:700px){
+  dialog{width:100%;max-width:100%;margin:auto 0 0;border-radius:18px 18px 0 0;border-bottom:0;max-height:calc(100dvh - 12px);max-height:calc(100vh - 12px)}
+  @supports(height:100dvh){dialog{max-height:calc(100dvh - 12px)}}
+}
+dialog h3{font-size:18px;margin-bottom:8px}
+dialog label{margin:12px 0 5px}
+.chips.g2,.chips.g3,.chips.g4,.chips.g5{display:grid;gap:6px}
+.chips.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.chips.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.chips.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.chips.g5{grid-template-columns:repeat(5,minmax(0,1fr))}
+dialog .chips.g2 label,dialog .chips.g3 label,dialog .chips.g4 label,dialog .chips.g5 label{min-height:50px;padding:4px 3px;border-radius:12px;justify-content:center;text-align:center;font-size:14.5px;line-height:1.15;margin:0}
+dialog .chips.g5 label{font-size:13.5px}
+.sensblk{padding:2px 10px 10px}
+.sensblk .rf{margin:8px 0 0}
+dialog details summary{font-size:15px}
+.chips input:focus:not(:focus-visible)+label{outline:none}
+
+/* ===== petits écrans Android (320–400 px) ===== */
+.step input{padding:0;min-width:40px}
+@media(max-width:400px){
+  #chip{white-space:normal}
+  dialog .grid2{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)}
+  .step{gap:4px}.step button{width:44px}
+}
+@media(max-width:370px){
+  #probe .q{width:60px;font-size:13px}
+  #probe .rd{padding:6px 10px}
+  #probe .rd b{font-size:18px;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.15}
+  #probe .rd span{font-size:12.5px}
+  dialog .chips.g4 label{font-size:13px}
+  dialog .chips.g5 label{font-size:12.5px}
+  dialog .chips.g2 label,dialog .chips.g3 label{font-size:14px}
+  .dlgbody{padding:14px 12px 8px}.dlgbar{padding-left:12px!important;padding-right:12px!important}
+  .tabs button{font-size:13.5px}
+}
+@media(max-width:330px){
+  dialog .chips.g4 label{font-size:12px}
+  dialog .chips.g5 label{font-size:11.5px;padding:4px 1px}
+  #probe .rd b{font-size:16.5px}
+  .views label b{font-size:14.5px}.views label small{font-size:11.5px}
+}
 @media(min-width:900px){#top{left:412px}#toast{bottom:24px}}
 
 
@@ -1392,25 +1441,33 @@ const SHOMV='https://services.data.shom.fr/INSPIRE/wms/v',NDF='NDF_BDD_WLD_WGS84
 const HAB='https://ows.emodnet-seabedhabitats.eu/geoserver/emodnet_view/wms';
 const view=store.get('view',{c:[48.1,-3.6],z:8});
 const TOUCH=matchMedia('(pointer:coarse)').matches;if(TOUCH)document.body.classList.add('touch');
-const map=L.map('map',{zoomControl:false,minZoom:5,maxZoom:17,tapTolerance:22,bounceAtZoomLimits:false}).setView(view.c,view.z);
+const map=L.map('map',{zoomControl:false,minZoom:5,maxZoom:19,tapTolerance:22,bounceAtZoomLimits:false}).setView(view.c,view.z);
 L.control.scale({imperial:false,position:TOUCH?'bottomleft':'bottomright'}).addTo(map);
+let fadeTold=false;
+map.on('zoomend',()=>{if(typeof OV==='undefined')return;OV.forEach(o=>{if(FADE[o.id])setOp(o,o.op)});
+  const on=OV.some(o=>FADE[o.id]&&o.on);if(on&&map.getZoom()>=18&&!fadeTold){fadeTold=true;toast('Zoom très près : les relevés de fond sont atténués pour laisser voir la photo',4000)}});
 map.on('moveend',()=>{const c=map.getCenter();store.set('view',{c:[+c.lat.toFixed(5),+c.lng.toFixed(5)],z:map.getZoom()})});
 
+const SATURL='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const satLayer=o=>L.tileLayer(SATURL,Object.assign({maxZoom:20,maxNativeZoom:18,detectRetina:true,attribution:'Esri, Maxar'},o));
 const BASES={
-  emod:{n:'Relief (terre et mer)',l:L.tileLayer('https://tiles.emodnet-bathymetry.eu/2020/baselayer/web_mercator/{z}/{x}/{y}.png',{maxZoom:17,maxNativeZoom:12,attribution:'EMODnet Bathymetry'})},
-  plan:{n:'Plan des routes',l:L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',{subdomains:'abcd',maxZoom:17,maxNativeZoom:17,attribution:'© OpenStreetMap, © CARTO'})},
-  sat:{n:'Photo satellite',l:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:17,maxNativeZoom:17,attribution:'Esri, Maxar'})},
-  ocean:{n:'Carte océan',l:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:17,maxNativeZoom:13,attribution:'Esri, GEBCO, NOAA'})}
+  emod:{n:'Relief (photo satellite en zoomant près)',l:L.featureGroup([L.tileLayer('https://tiles.emodnet-bathymetry.eu/2020/baselayer/web_mercator/{z}/{x}/{y}.png',{maxZoom:13,maxNativeZoom:12,attribution:'EMODnet Bathymetry'}),satLayer({minZoom:14})])},
+  plan:{n:'Plan des routes',l:L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{subdomains:'abcd',maxZoom:19,maxNativeZoom:19,attribution:'© OpenStreetMap, © CARTO'})},
+  sat:{n:'Photo satellite',l:satLayer({})},
+  ocean:{n:'Carte océan',l:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,maxNativeZoom:13,attribution:'Esri, GEBCO, NOAA'})}
 };
 let curBase=store.get('base','emod');if(!BASES[curBase])curBase='emod';
 const firstRun=store.get('view2',null)==null;
 BASES[curBase].l.addTo(map);
 
-const SHOMT=(layer,z,maxN)=>L.tileLayer(`https://services.data.shom.fr/INSPIRE/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=${layer}&style=normal&tilematrixset=3857&tilematrix={z}&tilecol={x}&tilerow={y}&format=image/png`,{maxZoom:17,maxNativeZoom:maxN,zIndex:z,attribution:'Shom'});
+const SHOMT=(layer,z,maxN)=>L.tileLayer(`https://services.data.shom.fr/INSPIRE/wmts?service=WMTS&request=GetTile&version=1.0.0&layer=${layer}&style=normal&tilematrixset=3857&tilematrix={z}&tilecol={x}&tilerow={y}&format=image/png`,{maxZoom:19,maxNativeZoom:maxN,zIndex:z,attribution:'Shom'});
 const L3D=['LITTO3D_BZH_2018_2021_PYR_3857_WMTS','LITTO3D_FINISTR_2014_PYR_3857_WMTS','L3D_MAR_MORBIHAN_2015_PYR_3857_WMTS','L3D_MAR_PNMI_2012_PYR_3857_WMTS','L3D_LIDAR_RANCE_2019_WMTS_3857','L3D_LIDAR_ROCHES_DOUVRES_BARNOUIC_2022_WMTS_3857'].map(n=>SHOMT(n,13,17));
-const wms=(url,layer,z)=>L.tileLayer.wms(url,{layers:layer,format:'image/png',transparent:true,version:'1.1.1',tileSize:512,zIndex:z,maxZoom:17});
+const wms=(url,layer,z)=>L.tileLayer.wms(url,{layers:layer,format:'image/png',transparent:true,version:'1.1.1',tileSize:256,detectRetina:true,zIndex:z,maxZoom:19});
 const partsOf=o=>o.parts||[o.l];
-const setOp=(o,v)=>partsOf(o).forEach(p=>p.setOpacity(v));
+/* au très fort zoom, les relevés (laser ~1 m, profondeurs ~100 m) sont plus grossiers que la photo : on les atténue pour laisser voir la photo nette */
+const FADE={l3d:1,mc:1,rb:1,mnt:1};
+const zFade=()=>{const z=typeof map!=='undefined'?map.getZoom():10;return z>=19?.3:z>=18?.55:1};
+const setOp=(o,v)=>{const f=FADE[o.id]?zFade():1;partsOf(o).forEach(p=>p.setOpacity(v*f))};
 const OV=[
  {id:'mc',g:'ov-depth',n:'Profondeur en couleurs',h:'Une couleur par tranche de profondeur',l:wms(BATHY,'emodnet:mean_multicolour',11),op:.55,on:true,lg:[BATHY,'emodnet:mean_multicolour']},
  {id:'rb',g:'ov-depth',n:'Profondeur bien contrastée',h:'Plus lisible au large',l:wms(BATHY,'emodnet:mean_rainbowcolour',11),op:.55,on:false,lg:[BATHY,'emodnet:mean_rainbowcolour']},
@@ -1423,7 +1480,7 @@ const OV=[
  {id:'bio',g:'ov-bio',n:'Zone à algues ou sans lumière',h:'Où poussent les algues, où il fait sombre',l:wms(HAB,'eusm_bio_group',20),op:.6,on:false,lg:[HAB,'eusm_bio_group'],q:1,cand:['eusm_bio_group','eusm2025_bio_group','eusm2023_bio_group']},
  {id:'ener',g:'ov-bio',n:'Fond battu ou abrité',h:'Force de la houle et du courant sur le fond',l:wms(HAB,'eusm_ene_group',20),op:.6,on:false,lg:[HAB,'eusm_ene_group'],q:1,cand:['eusm_ene_group','eusm2025_ene_group','eusm2023_ene_group']},
  {id:'ospar',g:'ov-bio',n:'Herbiers et maërl (protégés)',h:'Zostères, maërl, récifs d\'hermelles',l:wms(HAB,'ospar2020_poly',22),op:.85,on:false,lg:[HAB,'ospar2020_poly'],cand:['ospar2020_poly','ospar2022_poly','ospar_poly']},
- {id:'sea',g:'ov-nav',n:'Balisage',h:'Bouées, phares, cardinales',l:L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',{maxZoom:17,maxNativeZoom:17,zIndex:40,attribution:'OpenSeaMap'}),op:1,on:true},
+ {id:'sea',g:'ov-nav',n:'Balisage',h:'Bouées, phares, cardinales',l:L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',{maxZoom:19,maxNativeZoom:18,zIndex:40,attribution:'OpenSeaMap'}),op:1,on:true},
  {id:'limtm',g:'ov-nav',n:'Limite des plus hautes mers',h:'Haut de l\'estran',l:SHOMT('LIMTM_3857_WMTS',36,17),op:1,on:false},
  {id:'names',g:'ov-nav',n:'Noms des fonds',h:'Bancs, fosses, canyons',l:wms(BATHY,'gebco:undersea_features',35),op:1,on:false}
 ];
@@ -1438,15 +1495,13 @@ OV.forEach(o=>{
 const saveOv=()=>store.set('ov',Object.fromEntries(OV.map(o=>[o.id,{on:o.on,op:o.op}])));
 /* état de chaque couche : chargement, affichée, indisponible */
 function setSt(o,txt,cls){const e=document.getElementById('s-'+o.id);if(e){e.textContent=txt;e.className='st '+(cls||'')}}
-OV.forEach(o=>{
-  o.err=0;o.ok=0;
-  partsOf(o).forEach(p=>{
+function attachSt(o,p){
   p.on('loading',()=>{if(o.on&&!o.dead){setSt(o,'· charge…','')}});
   p.on('tileload',()=>{o.ok++});
   p.on('tileerror',()=>{o.err++});
   p.on('load',()=>{if(!o.on||o.dead)return;if(o.ok===0&&o.err>0)setSt(o,'· ne répond pas','bad');else if(o.ok>0)setSt(o,'· affichée','good');else setSt(o,o.parts?'· zoome près de la côte':'· affichée','')});
-  });
-});
+}
+OV.forEach(o=>{o.err=0;o.ok=0;partsOf(o).forEach(p=>attachSt(o,p))});
 function probeWMS(base,name){return new Promise(res=>{const i=new Image(),t=setTimeout(()=>res(false),20000);i.onload=()=>{clearTimeout(t);res(i.naturalWidth>0)};i.onerror=()=>{clearTimeout(t);res(false)};
   i.src=base+'?'+new URLSearchParams({service:'WMS',version:'1.1.1',request:'GetMap',layers:name,styles:'',srs:'EPSG:4326',bbox:'-5.5,46.5,-1,49.5',width:64,height:64,format:'image/png',transparent:'true'})})}
 async function resolveLayer(o){
@@ -1465,6 +1520,11 @@ async function resolveLayer(o){
   const c=document.getElementById('c-'+o.id);if(c&&!o.on)c.disabled=true;
 }
 OV.filter(o=>o.cand).forEach(resolveLayer);
+/* Nature du fond SHOM : version dessinée (nette à tous les zooms) si le serveur la fournit */
+(async()=>{const o=OV.find(x=>x.id==='ndf');if(!o||!await probeWMS(SHOMV,NDF))return;
+  const v=L.tileLayer.wms(SHOMV,{layers:NDF,format:'image/png',transparent:true,version:'1.1.1',tileSize:256,detectRetina:true,zIndex:19,maxZoom:19,attribution:'Shom'});
+  v.setOpacity(o.op);attachSt(o,v);const was=o.on;if(was)map.removeLayer(o.l);o.l=v;if(was)v.addTo(map);
+})();
 if(firstRun)setTimeout(()=>applyView('bateau'),0);
 
 $('#bases').innerHTML=Object.entries(BASES).map(([k,b])=>`<div class="row"><input type="radio" name="base" id="b-${k}" value="${k}" ${k===curBase?'checked':''}><label for="b-${k}">${b.n}</label></div>`).join('');
@@ -1673,7 +1733,7 @@ async function probeCenter(){
   if(dr.ok){const v=Object.values(dr.v.features?.[0]?.properties||{}).map(Number).find(n=>isFinite(n));d=v===undefined?'—':v<0?Math.abs(v).toFixed(1).replace('.',',')+' m':'Découvre'}
   const lab=fr2.ok?labelOf(o||{id:'ndf'},fr2.v.features?.[0]?.properties):null;
   const col=o&&lab?colorOf(rules,lab):null;
-  const txt=!dr.ok&&!fr2.ok?'Toucher pour lire':d+(lab?' · '+(s=>s.length>20?s.slice(0,19)+'…':s)(fr(lab)):'');
+  const txt=!dr.ok&&!fr2.ok?(innerWidth<=370?'Toucher ici':'Toucher pour lire'):d+(lab?' · '+(s=>s.length>20?s.slice(0,19)+'…':s)(fr(lab)):'');
   const val={txt,col:o&&lab?col:null};
   fiCache.set(key,val);if(fiCache.size>300)fiCache.delete(fiCache.keys().next().value);probeSet(val.txt,val.col);
 }
@@ -1853,7 +1913,7 @@ setInterval(()=>{if(cond)renderCond()},5*60e3);
    ========================================================= */
 let spots=store.get('spots',[]),catches=store.get('catches',[]);
 const SPECIES=['Bar','Maquereau','Lieu jaune','Dorade rose','Dorade grise','Vieille','Seiche','Autre'];
-const TIDES=['Toute marée','Montante','Descendante','Autour de la PM','Autour de la BM'];
+const TIDES=['Toute marée','Montante','Descendante','Haute mer','Basse mer'];
 const spotLayer=L.layerGroup().addTo(map);
 const pinIcon=L.divIcon({className:'spotpin',iconSize:[28,36],iconAnchor:[14,34],html:'<svg viewBox="0 0 28 36"><path d="M14 1C7 1 2 6.2 2 13c0 9 12 21 12 21s12-12 12-21C26 6.2 21 1 14 1z" fill="#ff8a1f" stroke="#fff" stroke-width="2"/><path d="M8 13c3-4 8-4 11 0-3 4-8 4-11 0zm11 0 3-2.5v5z" fill="#fff"/></svg>'});
 function saveSpots(){store.set('spots',spots);store.set('catches',catches);renderSpots();if(typeof renderDecl==='function')renderDecl();if(typeof renderStats==='function'&&curTab==='stats')renderStats()}
@@ -1874,19 +1934,19 @@ function spotPopup(s){
    <button class="btn" data-act="catch" data-id="${s.id}">Noter une prise ici</button><button class="btn" style="background:#33475b" data-act="sound" data-lat="${s.lat}" data-lng="${s.lng}">Profondeur et fond</button><button class="btn" style="background:#33475b" data-act="edit" data-id="${s.id}">Modifier</button></div>`).openOn(map);
 }
 const dlg=$('#dlg'),form=$('#dlgForm');
-function openDlg(html,onOk){form.innerHTML=html;dlg.showModal();form.onsubmit=null;form.onchange=null;
+function openDlg(html,onOk){const m=html.match(/<div class="dlgbar">[\s\S]*$/);form.innerHTML=m?`<div class="dlgbody">${html.slice(0,m.index)}</div>${m[0]}`:`<div class="dlgbody">${html}</div>`;dlg.showModal();try{document.activeElement&&document.activeElement.blur()}catch(_){};form.querySelector('.dlgbody').scrollTop=0;form.onsubmit=null;form.onchange=null;
   form.querySelector('[data-cancel]')?.addEventListener('click',e=>{e.preventDefault();dlg.close()});
   form.querySelector('[data-del]')?.addEventListener('click',e=>{e.preventDefault();onOk('delete');});
   form.querySelectorAll('[data-st]').forEach(b=>b.addEventListener('click',()=>{const i=form.querySelector('#c-n');i.value=Math.max(1,Math.min(200,(+i.value||1)+(+b.dataset.st)));buzz(15)}));
   form.onsubmit=e=>{e.preventDefault();if(onOk(new FormData(form))!==false)dlg.close()};
 }
-const chips=(name,arr,v)=>`<div class="chips" role="radiogroup">${arr.map((x,i)=>`<input type="radio" name="${name}" id="${name}-${i}" value="${esc(x)}" ${x===v?'checked':''}><label for="${name}-${i}">${esc(x)}</label>`).join('')}</div>`;
+const chips=(name,arr,v,cls='')=>`<div class="chips ${cls}" role="radiogroup">${arr.map((x,i)=>`<input type="radio" name="${name}" id="${name}-${i}" value="${esc(x)}" ${x===v?'checked':''}><label for="${name}-${i}">${esc(x)}</label>`).join('')}</div>`;
 const opt=(arr,v)=>arr.map(x=>`<option ${x===v?'selected':''}>${esc(x)}</option>`).join('');
 function editSpot(s,ll){
   const isNew=!s;s=s||{id:uid(),lat:ll.lat,lng:ll.lng,name:'',species:'Bar',tide:'Toute marée',note:'',created:Date.now()};
   openDlg(`<h3>${isNew?'Nouveau coin':'Modifier le coin'}</h3><p class="hint">${pos2txt(L.latLng(s.lat,s.lng))}</p>
-   <label>Espèce visée</label>${chips('species',SPECIES,s.species)}
-   <label>Meilleure marée</label>${chips('tide',TIDES,s.tide)}
+   <label>Espèce visée</label>${chips('species',SPECIES,s.species,'g4')}
+   <label>Meilleure marée</label>${chips('tide',TIDES,s.tide,'g3')}
    <label for="f-name">Nom (facultatif)</label><input type="text" id="f-name" name="name" maxlength="60" value="${esc(s.name)}" placeholder="ex. Basse du phare" autocomplete="off">
    <label for="f-note">Notes (technique, vent favorable, profondeur…)</label><textarea id="f-note" name="note" maxlength="500">${esc(s.note)}</textarea>
    <div class="dlgbar">${isNew?'':'<button class="btn" data-del>Supprimer</button>'}<button class="btn" data-cancel>Annuler</button><button class="btn pri" type="submit">Enregistrer</button></div>`,
@@ -1914,12 +1974,12 @@ function editCatch(spotId){
   const now=new Date(),loc=new Date(now.getTime()-now.getTimezoneOffset()*6e4).toISOString().slice(0,16);
   const last=store.get('lastSp','Bar');
   openDlg(`<h3>Noter une prise</h3>
-   ${chips('species',SPECIES,sp?.species||last)}
+   ${chips('species',SPECIES,sp?.species||last,'g4')}
    <div class="grid2"><div><label for="c-sz">Taille (cm)</label><input type="number" id="c-sz" name="size" min="1" max="200" inputmode="numeric" placeholder="facultatif"></div>
    <div><label for="c-n">Nombre</label><div class="step"><button type="button" data-st="-1" aria-label="Un de moins">−</button><input type="number" id="c-n" name="count" min="1" max="200" value="1" inputmode="numeric"><button type="button" data-st="1" aria-label="Un de plus">+</button></div></div></div>
    <div id="sensBlk" class="sensblk"><p class="rf">À déclarer sur RecFishing</p>
-   <label>Le poisson est</label>${chips('fate',['Gardé','Relâché'],'Gardé')}
-   <label>Technique</label>${chips('tech',TECHS,store.get('lastTech','Leurre'))}
+   <label>Le poisson est</label>${chips('fate',['Gardé','Relâché'],'Gardé','g2')}
+   <label>Technique</label>${chips('tech',TECHS,store.get('lastTech','Leurre'),'g5')}
    <label for="c-w">Poids en kg (facultatif)</label><input type="text" id="c-w" name="weight" inputmode="decimal" placeholder="ex. 1,2"></div>
    <details><summary>Plus de détails (coin, heure, leurre, note)</summary>
    <label for="c-spot">Coin</label><select id="c-spot" name="spot"><option value="">${me?'Là où je suis':'Sous la croix'}</option>${spots.map(s=>`<option value="${s.id}" ${s.id===spotId?'selected':''}>${esc(s.name)}</option>`).join('')}</select>
@@ -2054,8 +2114,8 @@ function bindDeclSettings(){
 function fixCatch(id){
   const c=catches.find(x=>x.id===id);if(!c)return;
   openDlg(`<h3>${esc(c.species)} du ${fmtD(c.date)} ${fmtH(c.date)}</h3>
-   <label>Le poisson est</label>${chips('fate',['Gardé','Relâché'],c.fate||'Gardé')}
-   <label>Technique</label>${chips('tech',TECHS,c.tech||store.get('lastTech','Leurre'))}
+   <label>Le poisson est</label>${chips('fate',['Gardé','Relâché'],c.fate||'Gardé','g2')}
+   <label>Technique</label>${chips('tech',TECHS,c.tech||store.get('lastTech','Leurre'),'g5')}
    <div class="grid2"><div><label for="x-sz">Taille (cm)</label><input type="number" id="x-sz" name="size" inputmode="numeric" value="${c.size||''}"></div>
    <div><label for="c-n">Nombre</label><div class="step"><button type="button" data-st="-1" aria-label="Un de moins">−</button><input type="number" id="c-n" name="count" min="1" value="${c.count||1}" inputmode="numeric"><button type="button" data-st="1" aria-label="Un de plus">+</button></div></div></div>
    <label for="x-w">Poids en kg (facultatif)</label><input type="text" id="x-w" name="weight" inputmode="decimal" value="${c.weight!=null?String(c.weight).replace('.',','):''}">
@@ -2230,17 +2290,19 @@ function removeDemo(){spots=spots.filter(s=>!s.demo);catches=catches.filter(c=>!
    ========================================================= */
 function tileURLs(depth){
   const b=map.getBounds(),z0=Math.max(6,Math.round(map.getZoom())),urls=new Set();
-  const layers=[BASES[curBase].l,...OV.filter(o=>o.on).flatMap(partsOf)];
+  const flat=l=>l.getLayers?l.getLayers().flatMap(flat):[l];
+  const layers=[...flat(BASES[curBase].l),...OV.filter(o=>o.on).flatMap(o=>flat(o.l))];
   for(const l of layers){
-    const ts=l.getTileSize().x,isW=l instanceof L.TileLayer.WMS,maxN=l.options.maxNativeZoom??l.options.maxZoom??17;
-    for(let z=z0;z<=Math.min(17,z0+depth);z++){
+    const ts=l.getTileSize().x,isW=l instanceof L.TileLayer.WMS,o=l.options,maxN=o.maxNativeZoom??o.maxZoom??19,off=isW?0:(o.zoomOffset||0);
+    for(let z=z0;z<=Math.min(19,z0+depth);z++){
+      if(z<(o.minZoom||0)||z>(o.maxZoom??19))continue;
       const zz=Math.min(z,maxN);
       const nw=map.project(b.getNorthWest(),zz),se=map.project(b.getSouthEast(),zz);
       const x0=Math.floor(nw.x/ts),x1=Math.floor(se.x/ts),y0=Math.floor(nw.y/ts),y1=Math.floor(se.y/ts);
       for(let x=x0;x<=x1;x++)for(let y=y0;y<=y1;y++){
         const c=L.point(x,y);c.z=zz;
         if(isW)urls.add(l.getTileUrl(c));
-        else urls.add(L.Util.template(l._url,L.Util.extend({r:'',s:l._getSubdomain(c),x,y,z:zz},l.options)));
+        else urls.add(L.Util.template(l._url,L.Util.extend({},o,{r:L.Browser.retina?'@2x':'',s:l._getSubdomain(c),x,y,z:zz+off})));
       }
     }
   }
